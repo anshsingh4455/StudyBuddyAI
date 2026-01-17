@@ -60,7 +60,17 @@ def openrouter_chat(
         LLMError: If API call fails or response is invalid
     """
     if not api_key or not api_key.strip():
-        raise LLMError("OpenRouter API key is required. Please set it in the sidebar or environment.")
+        raise LLMError("OpenRouter API key is required. Please set it in the .env file or environment variables.")
+    
+    # Validate API key format (should start with sk-or-v1- or sk-or-v1)
+    api_key_clean = api_key.strip()
+    # Allow both sk-or-v1- and sk-or-v1 formats, and also check for common variations
+    valid_prefixes = ["sk-or-v1-", "sk-or-v1", "sk-"]
+    if not any(api_key_clean.startswith(prefix) for prefix in valid_prefixes):
+        raise LLMError(
+            "Invalid API key format. OpenRouter API keys should start with 'sk-or-v1-' or 'sk-'. "
+            "Please check your .env file and get a valid key from https://openrouter.ai/keys"
+        )
     
     if not messages:
         raise LLMError("Messages list is empty. Cannot generate a response.")
@@ -102,14 +112,35 @@ def openrouter_chat(
         except Exception:  # noqa: BLE001
             error_msg = response.text
         
+        # Handle specific error codes with user-friendly messages
+        if response.status_code == 401:
+            # 401 = Unauthorized - API key is invalid or expired
+            raise LLMError(
+                "Authentication failed. Your OpenRouter API key is invalid or expired. "
+                "Please check your `.env` file and ensure the key starts with 'sk-or-v1-'. "
+                "Get a new key at: https://openrouter.ai/keys",
+                is_model_error=False,
+            )
+        elif response.status_code == 429:
+            # 429 = Rate limit exceeded
+            raise LLMError(
+                "Rate limit exceeded. Please wait a moment and try again.",
+                is_model_error=False,
+            )
+        
         # Check if it's a model error that might be fixed by fallback
         error_lower = error_msg.lower()
         is_model_error = (
             "model" in error_lower and ("not found" in error_lower or "invalid" in error_lower)
         )
         
+        # Don't expose full error details for security
+        user_friendly_msg = error_msg
+        if "key" in error_lower or "api" in error_lower or "auth" in error_lower:
+            user_friendly_msg = "API authentication error. Please check your API key in the .env file."
+        
         raise LLMError(
-            f"OpenRouter returned an error (status {response.status_code}): {error_msg}",
+            f"OpenRouter API error (status {response.status_code}): {user_friendly_msg}",
             is_model_error=is_model_error,
         )
     

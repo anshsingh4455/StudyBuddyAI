@@ -145,7 +145,12 @@ def _handle_text_chat_tab(api_key: str, model: str) -> None:
                         )
                     add_message("assistant", response)
                 except Exception as exc:  # noqa: BLE001
-                    ui.show_error(f"❌ Something went wrong while talking to the AI: {exc}")
+                    # Don't expose full error details - show user-friendly message
+                    error_msg = str(exc)
+                    if "401" in error_msg or "authentication" in error_msg.lower() or "invalid" in error_msg.lower():
+                        ui.show_error("❌ Authentication failed. Please check your API key in the .env file.")
+                    else:
+                        ui.show_error(f"❌ Something went wrong while talking to the AI. Please try again.")
                     return
         else:
             # Regular text response (no images requested)
@@ -165,7 +170,12 @@ def _handle_text_chat_tab(api_key: str, model: str) -> None:
                         chat_history=chat_history_for_llm,
                     )
             except Exception as exc:  # noqa: BLE001
-                ui.show_error(f"❌ Something went wrong while talking to the AI: {exc}")
+                # Don't expose full error details - show user-friendly message
+                error_msg = str(exc)
+                if "401" in error_msg or "authentication" in error_msg.lower() or "invalid" in error_msg.lower():
+                    ui.show_error("❌ Authentication failed. Please check your API key in the .env file.")
+                else:
+                    ui.show_error(f"❌ Something went wrong while talking to the AI. Please try again.")
                 return
 
             add_message("assistant", response)
@@ -211,7 +221,12 @@ def _handle_image_solver_tab(api_key: str, model: str) -> None:
                 model=model,
             )
     except Exception as exc:  # noqa: BLE001
-        ui.show_error(f"❌ Something went wrong while talking to the AI: {exc}")
+        # Don't expose full error details - show user-friendly message
+        error_msg = str(exc)
+        if "401" in error_msg or "authentication" in error_msg.lower() or "invalid" in error_msg.lower():
+            ui.show_error("❌ Authentication failed. Please check your API key in the .env file.")
+        else:
+            ui.show_error(f"❌ Something went wrong while talking to the AI. Please try again.")
         return
 
     combined = f"### Extracted Text\n\n{ocr_text}\n\n---\n\n### AI Explanation\n\n{response}"
@@ -244,7 +259,12 @@ def _handle_explain_notes_tab(api_key: str, model: str) -> None:
                     model=model,
                 )
         except Exception as exc:  # noqa: BLE001
-            ui.show_error(f"❌ Something went wrong while talking to the AI: {exc}")
+            # Don't expose full error details - show user-friendly message
+            error_msg = str(exc)
+            if "401" in error_msg or "authentication" in error_msg.lower() or "invalid" in error_msg.lower():
+                ui.show_error("❌ Authentication failed. Please check your API key in the .env file.")
+            else:
+                ui.show_error(f"❌ Something went wrong while talking to the AI. Please try again.")
             return
 
         ui.show_markdown_section("📝 Explanation", response)
@@ -279,7 +299,12 @@ def _handle_explain_notes_tab(api_key: str, model: str) -> None:
                 model=model,
             )
     except Exception as exc:  # noqa: BLE001
-        ui.show_error(f"❌ Something went wrong while talking to the AI: {exc}")
+        # Don't expose full error details - show user-friendly message
+        error_msg = str(exc)
+        if "401" in error_msg or "authentication" in error_msg.lower() or "invalid" in error_msg.lower():
+            ui.show_error("❌ Authentication failed. Please check your API key in the .env file.")
+        else:
+            ui.show_error(f"❌ Something went wrong while talking to the AI. Please try again.")
         return
 
     combined = f"### Extracted Notes Text\n\n{ocr_text}\n\n---\n\n### AI Explanation\n\n{response}"
@@ -365,6 +390,26 @@ def run_app() -> None:
     # Use env key or secret key (no sidebar override)
     api_key = env_key or secret_key
 
+    # Validate API key format if present
+    if api_key:
+        api_key_clean = api_key.strip()
+        # Allow both sk-or-v1- and sk-or-v1 formats, and also check for common variations
+        valid_prefixes = ["sk-or-v1-", "sk-or-v1", "sk-"]
+        if not any(api_key_clean.startswith(prefix) for prefix in valid_prefixes):
+            st.error(
+                "⚠️ **Invalid API Key Format**\n\n"
+                "Your OpenRouter API key format is incorrect. Keys should start with 'sk-or-v1-' or 'sk-'.\n\n"
+                "Please check your `.env` file and ensure it contains:\n"
+                "`OPENROUTER_API_KEY=sk-or-v1-your-actual-key-here`\n\n"
+                "**Troubleshooting:**\n"
+                "1. Make sure there are no extra spaces or quotes around the key\n"
+                "2. The key should be on a single line\n"
+                "3. Get a new key at: https://openrouter.ai/keys if needed\n\n"
+                "**Note:** If your key is valid but still shows this error, it may be expired or invalid."
+            )
+            st.stop()
+        api_key = api_key_clean
+
     # Set default model (no user selection)
     model = "xiaomi/mimo-v2-flash:free"
 
@@ -377,7 +422,7 @@ def run_app() -> None:
             "- `.env` file: `OPENROUTER_API_KEY=sk-or-v1-...` (in project root)\n"
             "- Environment variable: `OPENROUTER_API_KEY`\n"
             "- Streamlit secrets: `OPENROUTER_API_KEY`\n\n"
-            f"**Debug:** .env file {'found' if env_file_exists else 'NOT FOUND'} at: `{env_path}`\n\n"
+            f"**Status:** .env file {'found' if env_file_exists else 'NOT FOUND'} at: `{env_path.name}`\n\n"
             "Get your free API key at: https://openrouter.ai/keys"
         )
         st.stop()
